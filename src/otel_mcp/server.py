@@ -62,7 +62,7 @@ async def _get_backend() -> BaseBackend:
     return _backend
 
 
-def _json_response(data: dict | list | str) -> str:
+def _json_response(data: dict[str, object] | list[object] | str) -> str:
     """Convert data to JSON string response."""
     if isinstance(data, str):
         return data
