@@ -1,0 +1,91 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Lint (Ruff)
+        run: make lint
+
+      - name: Type Check (mypy)
+        run: make typecheck
+
+      - name: Run tests
+        run: make test
+
+      - name: Sync Project Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF_NAME#v}
+            echo "Type: Tagged Release"
+
+          # If not a tag, use Last Tag + -dev (e.g. 1.0.0-dev)
+          else
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            VERSION="${LAST_TAG#v}-dev"
+            echo "Type: Dev Build (Last tag: $LAST_TAG)"
+          fi
+
+          echo "Syncing pyproject.toml to version: $VERSION"
+          uv version "$VERSION"
+          uv version
+
+      - name: Build package
+        run: make build
+
+      - name: Upload Build Artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-artifacts
+          path: dist/*
+          retention-days: 1
+
+  publish:
+    name: Release and Publish
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for GitHub Releases
+      id-token: write  # Required for PyPI Trusted Publishing
+
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-artifacts
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
