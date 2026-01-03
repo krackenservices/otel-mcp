@@ -10,6 +10,39 @@ An MCP (Model Context Protocol) server for Jaeger trace analysis during developm
 - **REST API**: FastAPI endpoints with OpenAPI documentation at `/docs`
 - **Self-Telemetry**: The server traces itself to Jaeger for debugging
 
+## Installation
+
+### Using uvx (Recommended)
+
+Run directly without installing:
+
+```bash
+# Run MCP server
+uvx otel-mcp
+
+# Run REST API
+uvx --from otel-mcp otel-mcp-api
+```
+
+### Using pip
+
+```bash
+pip install otel-mcp
+
+# Then run
+otel-mcp        # MCP server
+otel-mcp-api    # REST API
+```
+
+### From Source
+
+```bash
+git clone https://github.com/ryanm101/otel-mcp.git
+cd otel-mcp
+uv sync
+uv run otel-mcp
+```
+
 ## Quick Start
 
 ### 1. Start Jaeger
@@ -19,23 +52,37 @@ docker-compose up -d
 # Jaeger UI at http://localhost:16686
 ```
 
-### 2. Install Dependencies
+### 2. Run the MCP Server
 
 ```bash
-uv sync
+uvx otel-mcp
+# Or with environment variables:
+JAEGER_URL=http://jaeger:16686 uvx otel-mcp
 ```
 
-### 3. Run the MCP Server
+### 3. Or Run the REST API
 
 ```bash
-uv run otel-mcp
-```
-
-### 4. Or Run the REST API
-
-```bash
-uv run otel-mcp-api
+uvx --from otel-mcp otel-mcp-api
 # OpenAPI docs at http://localhost:8000/docs
+```
+
+## MCP Client Configuration
+
+Add to your MCP client config (e.g., Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "otel-mcp": {
+      "command": "uvx",
+      "args": ["otel-mcp"],
+      "env": {
+        "JAEGER_URL": "http://localhost:16686"
+      }
+    }
+  }
+}
 ```
 
 ## Configuration
@@ -108,20 +155,6 @@ uv run pytest tests/ --cov=otel_mcp --cov-report=term-missing
 ```bash
 uv run ruff check src/
 uv run mypy src/
-```
-
-## Architecture
-
-```
-src/otel_mcp/
-├── server.py          # MCP server with tool definitions
-├── api.py             # FastAPI REST endpoints
-├── config.py          # Configuration management
-├── models.py          # Pydantic data models
-├── telemetry.py       # Self-instrumentation setup
-└── backends/
-    ├── base.py        # Abstract backend interface
-    └── jaeger.py      # Jaeger implementation
 ```
 
 ### Adding a New Backend
