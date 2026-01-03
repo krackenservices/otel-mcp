@@ -77,10 +77,14 @@ def _json_response(data: dict[str, object] | list[object] | str) -> str:
 @mcp.tool()
 @traced("mcp.list_services")
 async def list_services() -> str:
-    """List all available services in Jaeger.
+    """List all available services being traced in Jaeger.
+
+    Call this FIRST to discover what services exist before searching traces.
+    Services are applications/microservices sending telemetry to Jaeger.
 
     Returns:
-        JSON string with list of services
+        JSON with 'services' (list of service names) and 'count'.
+        Example: {"services": ["user-service", "order-service"], "count": 2}
     """
     try:
         backend = await _get_backend()
@@ -94,13 +98,17 @@ async def list_services() -> str:
 @mcp.tool()
 @traced("mcp.list_operations")
 async def list_operations(service_name: str) -> str:
-    """List all operations for a specific service.
+    """List all operations (endpoints/functions) for a specific service.
+
+    Use this after list_services() to see what operations a service performs.
+    Operations are typically HTTP endpoints, RPC methods, or function names.
 
     Args:
-        service_name: Name of the service
+        service_name: Name of the service (from list_services)
 
     Returns:
-        JSON string with list of operations
+        JSON with 'operations' list and 'count'.
+        Example: {"service": "user-service", "operations": ["GET /users", "POST /users"], "count": 2}
     """
     try:
         backend = await _get_backend()
@@ -132,20 +140,24 @@ async def search_traces(
     has_error: bool | None = None,
     limit: int = 20,
 ) -> str:
-    """Search for traces with filters.
+    """Search for traces matching the given filters. Returns trace summaries with IDs.
+
+    IMPORTANT: You MUST call list_services() first to get valid service names.
+    This returns trace summaries - use get_trace(trace_id) to get full span details.
 
     Args:
-        service_name: Service name (required for Jaeger)
-        operation_name: Filter by operation name
-        start_time: Start time in ISO 8601 format
+        service_name: Service name (REQUIRED - get from list_services)
+        operation_name: Filter by operation (get from list_operations)
+        start_time: Start time in ISO 8601 format (e.g., "2024-01-01T00:00:00Z")
         end_time: End time in ISO 8601 format
-        min_duration_ms: Minimum trace duration in milliseconds
-        max_duration_ms: Maximum trace duration in milliseconds
-        has_error: Filter traces with errors
-        limit: Maximum traces to return (default: 20, max: 100)
+        min_duration_ms: Only traces slower than this (in milliseconds)
+        max_duration_ms: Only traces faster than this (in milliseconds)
+        has_error: Set to true to find only failed traces
+        limit: Max results (default: 20, max: 100)
 
     Returns:
-        JSON string with trace summaries
+        JSON with 'traces' list containing: trace_id, service, operation,
+        start_time, duration_ms, span_count, has_error. Use trace_id with get_trace().
     """
     from datetime import datetime
 
@@ -188,13 +200,18 @@ async def search_traces(
 @mcp.tool()
 @traced("mcp.get_trace")
 async def get_trace(trace_id: str) -> str:
-    """Get complete trace details by ID.
+    """Get complete trace details including all spans and their relationships.
+
+    Use this AFTER search_traces() to get full details of a specific trace.
+    Shows the complete span tree with parent-child relationships, timing, and attributes.
 
     Args:
-        trace_id: Trace identifier
+        trace_id: The trace_id from search_traces() results
 
     Returns:
-        JSON string with full trace data including all spans
+        JSON with trace metadata and 'spans' array. Each span includes:
+        span_id, parent_span_id, operation, service, duration_ms, status,
+        has_error, error_message, and attributes (tags/metadata).
     """
     try:
         backend = await _get_backend()
@@ -245,16 +262,20 @@ async def find_errors(
     end_time: str | None = None,
     limit: int = 20,
 ) -> str:
-    """Find traces containing errors.
+    """Find traces that contain errors or failures.
+
+    Use this to debug application errors. Returns traces where at least one
+    span has an error status, along with error messages.
 
     Args:
-        service_name: Service name (required for Jaeger)
-        start_time: Start time in ISO 8601 format
+        service_name: Service name (REQUIRED - get from list_services)
+        start_time: Start time in ISO 8601 format (e.g., "2024-01-01T00:00:00Z")
         end_time: End time in ISO 8601 format
-        limit: Maximum error traces to return (default: 20)
+        limit: Max results (default: 20)
 
     Returns:
-        JSON string with error traces and error details
+        JSON with 'error_traces' list. Each includes trace_id, error_count,
+        and 'errors' array with span_id, operation, and error message.
     """
     from datetime import datetime
 
@@ -311,16 +332,20 @@ async def get_slow_traces(
     min_duration_ms: int = 1000,
     limit: int = 10,
 ) -> str:
-    """Find slowest traces for a service.
+    """Find the slowest traces for performance analysis.
+
+    Use this to identify performance bottlenecks. Returns traces sorted by
+    duration (slowest first) that exceed the minimum duration threshold.
 
     Args:
-        service_name: Service name (required for Jaeger)
-        operation_name: Filter by operation name
-        min_duration_ms: Minimum duration threshold (default: 1000ms)
-        limit: Maximum traces to return (default: 10)
+        service_name: Service name (REQUIRED - get from list_services)
+        operation_name: Filter to specific operation (get from list_operations)
+        min_duration_ms: Only show traces slower than this (default: 1000ms = 1s)
+        limit: Max results (default: 10)
 
     Returns:
-        JSON string with slowest traces sorted by duration
+        JSON with 'slow_traces' list sorted by duration_ms descending.
+        Each includes trace_id, operation, duration_ms, span_count.
     """
     try:
         backend = await _get_backend()
@@ -363,16 +388,20 @@ async def get_operation_stats(
     start_time: str | None = None,
     end_time: str | None = None,
 ) -> str:
-    """Get performance statistics for a service or operation.
+    """Get aggregated performance statistics for a service or operation.
+
+    Use this to understand overall service health and latency distribution.
+    Calculates percentiles (p50, p95, p99) and error rates from recent traces.
 
     Args:
-        service_name: Service name (required for Jaeger)
-        operation_name: Filter by specific operation
+        service_name: Service name (REQUIRED - get from list_services)
+        operation_name: Filter to specific operation (optional)
         start_time: Start time in ISO 8601 format
         end_time: End time in ISO 8601 format
 
     Returns:
-        JSON string with latency percentiles and error rates
+        JSON with: sample_size, error_count, error_rate (percentage),
+        and duration_ms object with min, max, avg, p50, p95, p99 latencies.
     """
     import statistics
     from datetime import datetime
