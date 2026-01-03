@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sys
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -15,10 +16,13 @@ from otel_mcp.telemetry import setup_telemetry, traced
 # Load environment variables
 load_dotenv()
 
-# Set up logging
+# Set up logging to STDERR (CRITICAL for MCP stdio transport!)
+# STDOUT must contain ONLY JSON-RPC protocol messages.
+# Any other output (logs, banners, prints) breaks the MCP client's parser.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stderr,  # Redirect all logs to STDERR
 )
 logger = logging.getLogger(__name__)
 
@@ -470,8 +474,10 @@ def main() -> None:
 
     logger.info("Starting Jaeger MCP Server")
 
-    # Run the MCP server
-    mcp.run()
+    # Run the MCP server with banner suppressed
+    # show_banner=False prevents FastMCP from printing to STDOUT
+    # which would corrupt the JSON-RPC protocol stream used by stdio transport
+    mcp.run(show_banner=False)
 
 
 if __name__ == "__main__":

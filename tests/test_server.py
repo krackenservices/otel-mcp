@@ -173,3 +173,67 @@ class TestGetOperationStatsTool:
             assert "duration_ms" in data
             assert "p50" in data["duration_ms"]
             assert "p95" in data["duration_ms"]
+
+
+class TestStdioProtocolCompliance:
+    """Tests to ensure MCP stdio transport works correctly.
+
+    MCP over stdio requires STDOUT to contain ONLY JSON-RPC protocol messages.
+    Any other output (logs, banners, print statements) will break the client.
+    """
+
+    def test_logging_configured_to_stderr(self) -> None:
+        """Verify that the server's logging is directed to stderr, not stdout.
+
+        This is critical for MCP stdio transport - any output to stdout that
+        isn't a JSON-RPC message will corrupt the protocol stream.
+        """
+        import logging
+        import sys
+
+        # Import the server module which configures logging
+        from otel_mcp import server  # noqa: F401
+
+        # Get the root logger's handlers
+        root_logger = logging.getLogger()
+
+        # Check that any StreamHandlers are pointing to stderr
+        for handler in root_logger.handlers:
+            if isinstance(handler, logging.StreamHandler):
+                # StreamHandler.stream should be stderr, not stdout
+                assert handler.stream is not sys.stdout, (
+                    "Logging handler is writing to stdout! "
+                    "This will break MCP stdio transport. "
+                    "All logs must go to stderr."
+                )
+
+    def test_server_module_does_not_print_to_stdout(self) -> None:
+        """Verify importing and using the server doesn't pollute stdout."""
+        import io
+        import sys
+
+        # Capture stdout during import
+        captured_stdout = io.StringIO()
+        original_stdout = sys.stdout
+
+        try:
+            sys.stdout = captured_stdout
+
+            # Force reimport of the server module
+            import importlib
+
+            from otel_mcp import server
+
+            importlib.reload(server)
+
+            # Get anything that was printed
+            stdout_content = captured_stdout.getvalue()
+
+        finally:
+            sys.stdout = original_stdout
+
+        # Stdout should be empty (no banners, logs, or print statements)
+        assert stdout_content == "", (
+            f"Server module printed to stdout during import: {stdout_content!r}\n"
+            "This will break MCP stdio transport. All output must go to stderr."
+        )
