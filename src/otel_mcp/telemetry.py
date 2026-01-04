@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def setup_telemetry(service_name: str = "jaeger-mcp") -> None:
+def setup_telemetry(service_name: str = "otel-mcp") -> None:
     """Configure OpenTelemetry tracing for the MCP server.
 
     Args:
@@ -60,7 +60,7 @@ def setup_telemetry(service_name: str = "jaeger-mcp") -> None:
         logger.warning(f"Failed to configure OpenTelemetry: {e}")
 
 
-def get_tracer(name: str = "jaeger-mcp") -> trace.Tracer:
+def get_tracer(name: str = "otel-mcp") -> trace.Tracer:
     """Get a tracer instance.
 
     Args:

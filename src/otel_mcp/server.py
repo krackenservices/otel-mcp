@@ -1,36 +1,57 @@
 """MCP Server with tools for Jaeger trace analysis."""
 
-import json
+# =============================================================================
+# BOOTSTRAP LOGGING - This runs IMMEDIATELY on import to catch early crashes
+# =============================================================================
 import logging
+import os
 import sys
 
-from dotenv import load_dotenv
-from fastmcp import FastMCP
+# Set up emergency logging before any other imports can fail
+_bootstrap_log_file = os.environ.get("OTEL_MCP_DEBUG_LOG_FILE")
+if _bootstrap_log_file:
+    try:
+        _log_path = os.path.join(os.getcwd(), _bootstrap_log_file)
+        _bootstrap_handler = logging.FileHandler(_log_path, mode="w")
+        _bootstrap_handler.setLevel(logging.DEBUG)
+        _bootstrap_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+        logging.getLogger().addHandler(_bootstrap_handler)
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger().debug(f"Bootstrap logging initialized: {_log_path}")
+        logging.getLogger().debug(f"Python version: {sys.version}")
+        logging.getLogger().debug(f"Working directory: {os.getcwd()}")
+    except Exception as e:
+        # Write to stderr as last resort
+        print(f"BOOTSTRAP LOG ERROR: {e}", file=sys.stderr)
 
-from otel_mcp.backends.base import BaseBackend
-from otel_mcp.backends.jaeger import JaegerBackend
-from otel_mcp.config import BackendType, get_settings
-from otel_mcp.models import TraceQuery
-from otel_mcp.telemetry import setup_telemetry, traced
+# =============================================================================
+# Normal imports - any crash here will now be logged
+# noqa: E402 comments needed because bootstrap logging MUST run before imports
+# =============================================================================
+import json  # noqa: E402
+
+from dotenv import load_dotenv  # noqa: E402
+from fastmcp import FastMCP  # noqa: E402
+
+from otel_mcp.backends.base import BaseBackend  # noqa: E402
+from otel_mcp.backends.jaeger import JaegerBackend  # noqa: E402
+from otel_mcp.config import BackendType, Settings, get_settings  # noqa: E402
+from otel_mcp.models import TraceQuery  # noqa: E402
+from otel_mcp.telemetry import setup_telemetry, traced  # noqa: E402
 
 # Load environment variables
 load_dotenv()
 
-# Set up logging to STDERR (CRITICAL for MCP stdio transport!)
-# STDOUT must contain ONLY JSON-RPC protocol messages.
-# Any other output (logs, banners, prints) breaks the MCP client's parser.
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    stream=sys.stderr,  # Redirect all logs to STDERR
-)
+# Logger instance
 logger = logging.getLogger(__name__)
 
 # Global backend instance
 _backend: BaseBackend | None = None
 
 # Initialize FastMCP server
-mcp = FastMCP("jaeger-mcp")
+mcp = FastMCP("otel-mcp")
 
 
 def _create_backend() -> BaseBackend:
@@ -462,17 +483,51 @@ async def get_operation_stats(
         return _json_response({"error": str(e)})
 
 
+def _setup_logging(settings: Settings) -> None:
+    """Configure logging based on settings.
+
+    CRITICAL: All logs go to STDERR or file, never STDOUT.
+    STDOUT must contain ONLY JSON-RPC protocol messages for MCP.
+    """
+    import os
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(settings.log_level)
+
+    # Clear any existing handlers
+    root_logger.handlers.clear()
+
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    formatter = logging.Formatter(log_format)
+
+    # Always log to stderr
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(formatter)
+    root_logger.addHandler(stderr_handler)
+
+    # If debug log file is configured, also log to file
+    if settings.debug_log_file:
+        log_path = os.path.join(os.getcwd(), settings.debug_log_file)
+        file_handler = logging.FileHandler(log_path, mode="w")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+        # Force DEBUG level when file logging is enabled
+        root_logger.setLevel(logging.DEBUG)
+        root_logger.info(f"Debug logging enabled: {log_path}")
+
+
 def main() -> None:
     """Run the MCP server."""
     settings = get_settings()
 
-    # Configure logging
-    logging.getLogger().setLevel(settings.log_level)
+    # Configure logging (must be done before any log calls)
+    _setup_logging(settings)
 
     # Set up self-telemetry
-    setup_telemetry("jaeger-mcp")
+    setup_telemetry("otel-mcp")
 
-    logger.info("Starting Jaeger MCP Server")
+    logger.info("Starting MCP Server")
 
     # Run the MCP server with banner suppressed
     # show_banner=False prevents FastMCP from printing to STDOUT

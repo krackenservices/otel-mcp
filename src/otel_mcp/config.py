@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR)",
     )
+    debug_log_file: str | None = Field(
+        default=None,
+        description="If set, write debug logs to this file in the working directory",
+    )
 
     # API settings
     api_host: str = Field(
@@ -48,6 +52,7 @@ class Settings(BaseSettings):
     )
 
     model_config = {
+        "env_prefix": "OTEL_MCP_",
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",

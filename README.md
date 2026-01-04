@@ -94,6 +94,9 @@ JAEGER_URL=http://localhost:16686
 JAEGER_TIMEOUT=30
 LOG_LEVEL=INFO
 
+# Debug logging (writes to file in working directory)
+# DEBUG_LOG_FILE=otel-mcp.log
+
 # Self-telemetry (optional)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 OTEL_SERVICE_NAME=otel-mcp

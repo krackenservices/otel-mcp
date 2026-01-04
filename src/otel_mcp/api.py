@@ -57,8 +57,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
     # Setup
     settings = get_settings()
-    setup_telemetry("jaeger-mcp-api")
-    logger.info(f"Starting Jaeger MCP API on {settings.api_host}:{settings.api_port}")
+    setup_telemetry("otel-mcp-api")
+    logger.info(f"Starting MCP API on {settings.api_host}:{settings.api_port}")
 
     yield
 
