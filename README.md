@@ -1,6 +1,7 @@
 # OTEL MCP Server
 
 Agentic: An MCP-native observability surface that lets agents query their own execution history.
+
 Human Centric: Query and analyze distributed traces with AI assistance for debugging and performance optimization.
 
 ## Features
