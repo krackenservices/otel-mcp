@@ -1,6 +1,7 @@
 # OTEL MCP Server
 
-An MCP (Model Context Protocol) server for Jaeger trace analysis during development. Query and analyze distributed traces with AI assistance for debugging and performance optimization.
+Agentic: An MCP-native observability surface that lets agents query their own execution history.
+Human Centric: Query and analyze distributed traces with AI assistance for debugging and performance optimization.
 
 ## Features
 
